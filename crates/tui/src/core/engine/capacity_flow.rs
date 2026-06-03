@@ -36,7 +36,7 @@ impl Engine {
     pub(super) async fn run_capacity_post_tool_checkpoint(
         &mut self,
         turn: &TurnContext,
-        mode: AppMode,
+
         tool_registry: Option<&crate::tools::ToolRegistry>,
         tool_exec_lock: Arc<RwLock<()>>,
         mcp_pool: Option<Arc<AsyncMutex<McpPool>>>,
@@ -56,7 +56,6 @@ impl Engine {
                 let _ = self
                     .apply_verify_with_tool_replay(
                         turn,
-                        mode,
                         snapshot.as_ref(),
                         tool_registry,
                         tool_exec_lock,
@@ -66,7 +65,7 @@ impl Engine {
                 false
             }
             GuardrailAction::VerifyAndReplan => {
-                self.apply_verify_and_replan(turn, mode, snapshot.as_ref(), "high_risk_post_tool")
+                self.apply_verify_and_replan(turn, snapshot.as_ref(), "high_risk_post_tool")
                     .await
             }
             GuardrailAction::NoIntervention | GuardrailAction::TargetedContextRefresh => false,
@@ -76,7 +75,7 @@ impl Engine {
     pub(super) async fn run_capacity_error_escalation_checkpoint(
         &mut self,
         turn: &TurnContext,
-        mode: AppMode,
+
         step_error_count: usize,
         consecutive_tool_error_steps: u32,
         error_categories: &[ErrorCategory],
@@ -136,7 +135,6 @@ impl Engine {
         let category_labels: Vec<String> = error_categories.iter().map(|c| c.to_string()).collect();
         self.apply_verify_and_replan(
             turn,
-            mode,
             Some(&forced),
             &format!(
                 "error_escalation: step_errors={}, consecutive_steps={}, categories={}",
@@ -385,7 +383,7 @@ impl Engine {
         &mut self,
         turn: &TurnContext,
         client: Option<&DeepSeekClient>,
-        mode: AppMode,
+        _mode: AppMode,
         snapshot: Option<&CapacitySnapshot>,
     ) -> bool {
         let before_tokens = self.estimated_input_tokens();
@@ -465,7 +463,7 @@ impl Engine {
             GuardrailAction::TargetedContextRefresh,
             None,
         )));
-        self.refresh_system_prompt(mode);
+        self.refresh_system_prompt();
         self.emit_session_updated().await;
 
         let after_tokens = self.estimated_input_tokens();
@@ -487,7 +485,6 @@ impl Engine {
     pub(super) async fn apply_verify_with_tool_replay(
         &mut self,
         turn: &TurnContext,
-        mode: AppMode,
         snapshot: Option<&CapacitySnapshot>,
         tool_registry: Option<&crate::tools::ToolRegistry>,
         tool_exec_lock: Arc<RwLock<()>>,
@@ -617,7 +614,7 @@ impl Engine {
             GuardrailAction::VerifyWithToolReplay,
             Some(&verification_note),
         )));
-        self.refresh_system_prompt(mode);
+        self.refresh_system_prompt();
         self.emit_session_updated().await;
 
         let after_tokens = self.estimated_input_tokens();
@@ -638,7 +635,6 @@ impl Engine {
     pub(super) async fn apply_verify_and_replan(
         &mut self,
         turn: &TurnContext,
-        mode: AppMode,
         snapshot: Option<&CapacitySnapshot>,
         reason: &str,
     ) -> bool {
@@ -685,7 +681,7 @@ impl Engine {
             GuardrailAction::VerifyAndReplan,
             Some("Replan now from canonical state. Keep steps minimal and verifiable."),
         )));
-        self.refresh_system_prompt(mode);
+        self.refresh_system_prompt();
         self.emit_session_updated().await;
 
         let _ = self

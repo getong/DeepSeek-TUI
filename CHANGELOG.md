@@ -91,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Appended volatile `<turn_meta>` blocks after user text in outgoing user
   message content arrays so provider prefix caches can keep matching the stable
   user-input prefix across date, route, and working-set changes.
+- Projected mode, approval, and tool-taxonomy prompt metadata per request
+  instead of mutating stored system prompts, keeping provider prefix-cache
+  inputs byte-stable while preserving mode-specific instructions (#2687).
+  Thanks @LeoAlex0 for the implementation.
 - Softened contribution intake automation: external issues now receive a warm
   triage note and are never auto-closed by the contribution gate, while the PR
   gate copy makes clear that dry-run observations are about maintainer safety,
