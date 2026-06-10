@@ -43,15 +43,15 @@ codewhale --model auto
 # https://github.com/Hmbown/CodeWhale/releases
 
 # 如果 GitHub 访问不稳定，可以使用 CNB 镜像：
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-cli --locked --force
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-tui --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-cli --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-tui --locked --force
 
 # 旧 Homebrew 兼容路径，formula 仍使用 deepseek-tui 名称
 brew tap Hmbown/deepseek-tui
 brew install deepseek-tui
 ```
 
-v0.8.54 的 `codewhale` npm wrapper 暂缓发布，直到 release asset 发布路径加固完成。本版本请使用 Cargo、GitHub Releases 或 CNB。
+`codewhale` npm wrapper 也可通过 `npm install -g codewhale` 安装。
 
 Docker、直接下载、中国大陆镜像、Windows/Scoop、Nix、校验和和故障排查见 [docs/INSTALL.md](docs/INSTALL.md)。
 

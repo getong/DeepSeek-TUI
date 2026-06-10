@@ -43,15 +43,15 @@ codewhale --model auto
 # https://github.com/Hmbown/CodeWhale/releases
 
 # GitHub に安定して到達できない場合は CNB mirror を使えます:
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-cli --locked --force
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-tui --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-cli --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-tui --locked --force
 
 # 旧 Homebrew 互換。formula はまだ deepseek-tui 名を使います。
 brew tap Hmbown/deepseek-tui
 brew install deepseek-tui
 ```
 
-v0.8.54 の `codewhale` npm wrapper は、release asset 公開経路を固めるまで意図的に延期しています。このリリースでは Cargo、GitHub Releases、または CNB を使ってください。
+`codewhale` npm wrapper も `npm install -g codewhale` で利用できます。
 
 Docker、直接ダウンロード、中国ミラー、Windows/Scoop、Nix、チェックサム、トラブルシュートは [docs/INSTALL.md](docs/INSTALL.md) を見てください。
 

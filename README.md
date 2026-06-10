@@ -77,17 +77,15 @@ Other install paths are supported:
 # https://github.com/Hmbown/CodeWhale/releases
 
 # CNB mirror path for users who cannot reliably reach GitHub:
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-cli --locked --force
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-tui --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-cli --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-tui --locked --force
 
 # Legacy Homebrew compatibility while the formula is renamed
 brew tap Hmbown/deepseek-tui
 brew install deepseek-tui
 ```
 
-The `codewhale` npm wrapper for v0.8.54 is intentionally deferred while the
-release asset publication path is being hardened. Use Cargo, GitHub Releases,
-or CNB for this release.
+The `codewhale` npm wrapper is also available via `npm install -g codewhale`.
 
 For Docker, direct downloads, China mirrors, Windows/Scoop, Nix, checksums, and
 troubleshooting, use [docs/INSTALL.md](docs/INSTALL.md) or the website install

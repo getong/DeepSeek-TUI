@@ -43,15 +43,15 @@ Các đường khác:
 # https://github.com/Hmbown/CodeWhale/releases
 
 # Nếu GitHub không ổn định, dùng CNB mirror:
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-cli --locked --force
-cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.54 codewhale-tui --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-cli --locked --force
+cargo install --git https://cnb.cool/codewhale.net/codewhale --tag v0.8.56 codewhale-tui --locked --force
 
 # Homebrew legacy trong lúc formula vẫn dùng tên deepseek-tui
 brew tap Hmbown/deepseek-tui
 brew install deepseek-tui
 ```
 
-Wrapper npm `codewhale` cho v0.8.54 được hoãn có chủ ý trong lúc đường phát hành release asset được gia cố. Với bản này, hãy dùng Cargo, GitHub Releases hoặc CNB.
+Wrapper npm `codewhale` cũng có thể được cài đặt qua `npm install -g codewhale`.
 
 Docker, tải trực tiếp, mirror Trung Quốc, Windows/Scoop, Nix, checksum và troubleshooting nằm trong [docs/INSTALL.md](docs/INSTALL.md).
 
