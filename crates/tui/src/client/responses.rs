@@ -408,9 +408,10 @@ impl DeepSeekClient {
                             text,
                             cache_control: None,
                         },
-                        ContentBlockStart::Thinking { thinking } => {
-                            ContentBlock::Thinking { thinking }
-                        }
+                        ContentBlockStart::Thinking { thinking } => ContentBlock::Thinking {
+                            thinking,
+                            signature: None,
+                        },
                         ContentBlockStart::ToolUse {
                             id,
                             name,
@@ -440,8 +441,9 @@ impl DeepSeekClient {
                             }
                         }
                         Delta::ThinkingDelta { thinking } => {
-                            if let Some(ContentBlock::Thinking { thinking: existing }) =
-                                response.content.get_mut(i)
+                            if let Some(ContentBlock::Thinking {
+                                thinking: existing, ..
+                            }) = response.content.get_mut(i)
                             {
                                 existing.push_str(&thinking);
                             }
@@ -450,6 +452,10 @@ impl DeepSeekClient {
                             if let Some(buf) = tool_args.get_mut(i) {
                                 buf.push_str(&partial_json);
                             }
+                        }
+                        Delta::SignatureDelta { .. } => {
+                            // Anthropic-native signature deltas never occur on
+                            // the Responses bridge (#3014).
                         }
                     }
                 }
@@ -538,7 +544,7 @@ fn convert_messages_to_responses_input(request: &MessageRequest) -> Vec<Value> {
                                 "arguments": serde_json::to_string(input).unwrap_or_default(),
                             }));
                         }
-                        ContentBlock::Thinking { thinking } => {
+                        ContentBlock::Thinking { thinking, .. } => {
                             items.push(json!({
                                 "type": "reasoning",
                                 "summary": [{

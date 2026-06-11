@@ -717,7 +717,18 @@ fn build_default_headers(
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     let api_key = api_key.trim();
-    let auth_header_name = if !api_key.is_empty()
+    if api_provider == ApiProvider::Anthropic {
+        // #3014: the Messages API authenticates with `x-api-key` (never
+        // `Authorization: Bearer`) and pins the wire contract via
+        // `anthropic-version`.
+        headers.insert(
+            HeaderName::from_static("anthropic-version"),
+            HeaderValue::from_static("2023-06-01"),
+        );
+    }
+    let auth_header_name = if !api_key.is_empty() && api_provider == ApiProvider::Anthropic {
+        Some(HeaderName::from_static("x-api-key"))
+    } else if !api_key.is_empty()
         && api_provider == ApiProvider::XiaomiMimo
         && (xiaomi_mimo_base_url_uses_token_plan(base_url)
             || xiaomi_mimo_api_key_uses_token_plan(api_key))
@@ -1141,6 +1152,9 @@ impl LlmClient for DeepSeekClient {
         if self.api_provider == ApiProvider::OpenaiCodex {
             return self.handle_responses_message(request).await;
         }
+        if self.api_provider == ApiProvider::Anthropic {
+            return self.handle_anthropic_message(request).await;
+        }
         self.create_message_chat(&request).await
     }
 
@@ -1150,6 +1164,9 @@ impl LlmClient for DeepSeekClient {
     ) -> Result<crate::llm_client::StreamEventBox> {
         if self.api_provider == ApiProvider::OpenaiCodex {
             return self.handle_responses_stream(request).await;
+        }
+        if self.api_provider == ApiProvider::Anthropic {
+            return self.handle_anthropic_stream(request).await;
         }
         self.handle_chat_completion_stream(request).await
     }
@@ -1254,6 +1271,11 @@ pub(super) fn apply_reasoning_effort(
             | ApiProvider::Huggingface
             | ApiProvider::Moonshot
             | ApiProvider::Ollama => {}
+            ApiProvider::Anthropic => {
+                // #3014: thinking/effort shaping happens natively inside
+                // client/anthropic.rs (adaptive thinking + output_config),
+                // not via OpenAI-dialect fields.
+            }
             ApiProvider::NvidiaNim => {
                 body["chat_template_kwargs"] = json!({
                     "thinking": false,
@@ -1317,6 +1339,11 @@ pub(super) fn apply_reasoning_effort(
             | ApiProvider::Moonshot
             | ApiProvider::Ollama
             | ApiProvider::OpenaiCodex => {}
+            ApiProvider::Anthropic => {
+                // #3014: thinking/effort shaping happens natively inside
+                // client/anthropic.rs (adaptive thinking + output_config),
+                // not via OpenAI-dialect fields.
+            }
             ApiProvider::NvidiaNim => {
                 body["chat_template_kwargs"] = json!({
                     "thinking": true,
@@ -1361,6 +1388,11 @@ pub(super) fn apply_reasoning_effort(
             | ApiProvider::Moonshot
             | ApiProvider::Ollama
             | ApiProvider::OpenaiCodex => {}
+            ApiProvider::Anthropic => {
+                // #3014: thinking/effort shaping happens natively inside
+                // client/anthropic.rs (adaptive thinking + output_config),
+                // not via OpenAI-dialect fields.
+            }
             ApiProvider::NvidiaNim => {
                 body["chat_template_kwargs"] = json!({
                     "thinking": true,
@@ -1486,6 +1518,7 @@ impl DeepSeekClient {
     }
 }
 
+mod anthropic;
 mod chat;
 mod responses;
 
@@ -1853,6 +1886,7 @@ mod tests {
             role: "assistant".to_string(),
             content: vec![
                 ContentBlock::Thinking {
+                    signature: None,
                     thinking: "plan".to_string(),
                 },
                 ContentBlock::Text {
@@ -1891,6 +1925,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "plan".to_string(),
                     },
                     ContentBlock::Text {
@@ -1940,6 +1975,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "Need to call a tool".to_string(),
                     },
                     ContentBlock::ToolUse {
@@ -1991,6 +2027,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "Need to call a tool".to_string(),
                     },
                     ContentBlock::ToolUse {
@@ -2061,6 +2098,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "Internal explanation plan".to_string(),
                     },
                     ContentBlock::Text {
@@ -2104,6 +2142,7 @@ mod tests {
             role: "assistant".to_string(),
             content: vec![
                 ContentBlock::Thinking {
+                    signature: None,
                     thinking: "I should explain step by step.".to_string(),
                 },
                 ContentBlock::Text {
@@ -2706,7 +2745,7 @@ mod tests {
 
         assert!(matches!(
             response.content.first(),
-            Some(ContentBlock::Thinking { thinking }) if thinking == "thinking via NIM"
+            Some(ContentBlock::Thinking { thinking, .. }) if thinking == "thinking via NIM"
         ));
         assert!(matches!(
             response.content.get(1),
@@ -2848,6 +2887,7 @@ mod tests {
         let message = Message {
             role: "assistant".to_string(),
             content: vec![ContentBlock::Thinking {
+                signature: None,
                 thinking: "plan".to_string(),
             }],
         };
@@ -2991,6 +3031,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "Need to inspect the directory".to_string(),
                     },
                     ContentBlock::ToolUse {
@@ -3031,6 +3072,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "Need to search".to_string(),
                     },
                     ContentBlock::ToolUse {
@@ -3120,6 +3162,7 @@ mod tests {
                 role: "assistant".to_string(),
                 content: vec![
                     ContentBlock::Thinking {
+                        signature: None,
                         thinking: "Need to list files".to_string(),
                     },
                     ContentBlock::ToolUse {

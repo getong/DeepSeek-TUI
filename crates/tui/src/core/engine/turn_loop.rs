@@ -430,6 +430,9 @@ impl Engine {
             let mut current_text_raw = String::new();
             let mut current_text_visible = String::new();
             let mut current_thinking = String::new();
+            // #3014: Anthropic signed-thinking signature for the current
+            // thinking block; must be replayed verbatim in tool loops.
+            let mut current_thinking_signature: Option<String> = None;
             let mut tool_uses: Vec<ToolUseState> = Vec::new();
             let mut usage = Usage {
                 input_tokens: 0,
@@ -757,6 +760,14 @@ impl Engine {
                                     .await;
                             }
                         }
+                        Delta::SignatureDelta { signature } => {
+                            // #3014: capture (and concatenate, defensively)
+                            // the signed-thinking signature for replay.
+                            match current_thinking_signature.as_mut() {
+                                Some(existing) => existing.push_str(&signature),
+                                None => current_thinking_signature = Some(signature),
+                            }
+                        }
                         Delta::InputJsonDelta { partial_json } => {
                             if let Some(&tool_idx) = current_tool_indices.get(&index)
                                 && let Some(tool_state) = tool_uses.get_mut(tool_idx)
@@ -857,6 +868,14 @@ impl Engine {
                         }
                     }
                     StreamEvent::MessageStop | StreamEvent::Ping => {}
+                    StreamEvent::Error { error } => {
+                        // #3014: Anthropic SSE error event. The adapter
+                        // surfaces fatal errors as stream Err items; this
+                        // defensive arm keeps any passed-through error
+                        // visible instead of silently dropped.
+                        crate::logging::warn(format!("Provider stream error event: {error}"));
+                        stream_errors += 1;
+                    }
                 }
             }
 
@@ -944,7 +963,10 @@ impl Engine {
                 None
             };
             if let Some(thinking) = thinking_to_persist {
-                content_blocks.push(ContentBlock::Thinking { thinking });
+                content_blocks.push(ContentBlock::Thinking {
+                    thinking,
+                    signature: current_thinking_signature.clone(),
+                });
             }
             let mut final_text = current_text_visible.clone();
             if tool_uses.is_empty() && tool_parser::has_tool_call_markers(&current_text_raw) {

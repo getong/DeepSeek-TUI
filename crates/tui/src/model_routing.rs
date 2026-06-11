@@ -334,7 +334,7 @@ fn message_response_text(response: &MessageResponse) -> String {
             ContentBlock::Text { text, .. } | ContentBlock::ToolResult { content: text, .. } => {
                 append_router_text(&mut out, text);
             }
-            ContentBlock::Thinking { thinking } => {
+            ContentBlock::Thinking { thinking, .. } => {
                 append_router_text(&mut out, thinking);
             }
             ContentBlock::ToolUse { name, .. } => {

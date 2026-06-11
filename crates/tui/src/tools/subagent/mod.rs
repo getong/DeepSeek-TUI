@@ -5249,7 +5249,7 @@ fn message_response_text(blocks: &[ContentBlock]) -> String {
                 }
                 out.push_str(text);
             }
-            ContentBlock::Thinking { thinking } => {
+            ContentBlock::Thinking { thinking, .. } => {
                 if !out.is_empty() {
                     out.push('\n');
                 }

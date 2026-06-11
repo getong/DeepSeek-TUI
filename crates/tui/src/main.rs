@@ -1990,6 +1990,10 @@ fn run_setup_status(config: &Config, workspace: &Path) -> Result<()> {
                     "OPENAI_API_KEY",
                     "codewhale auth set --provider openai --api-key \"...\"",
                 ),
+                crate::config::ApiProvider::Anthropic => (
+                    "ANTHROPIC_API_KEY",
+                    "codewhale auth set --provider anthropic --api-key \"...\"",
+                ),
                 crate::config::ApiProvider::Atlascloud => (
                     "ATLASCLOUD_API_KEY",
                     "codewhale auth set --provider atlascloud --api-key \"...\"",
@@ -2064,6 +2068,7 @@ fn run_setup_status(config: &Config, workspace: &Path) -> Result<()> {
                 match config.api_provider() {
                     crate::config::ApiProvider::NvidiaNim => "nvidia_nim",
                     crate::config::ApiProvider::Openai => "openai",
+                    crate::config::ApiProvider::Anthropic => "anthropic",
                     crate::config::ApiProvider::Atlascloud => "atlascloud",
                     crate::config::ApiProvider::WanjieArk => "wanjie_ark",
                     crate::config::ApiProvider::Volcengine => "volcengine",

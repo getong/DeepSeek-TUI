@@ -91,7 +91,15 @@ pub enum ContentBlock {
     #[serde(rename = "image_url")]
     ImageUrl { image_url: ImageUrlContent },
     #[serde(rename = "thinking")]
-    Thinking { thinking: String },
+    Thinking {
+        thinking: String,
+        /// Anthropic signed-thinking signature (#3014). Only populated on the
+        /// native Messages dialect and serde-skipped when absent so OpenAI
+        /// dialects are unaffected. Anthropic rejects tool loops that drop or
+        /// modify signed thinking blocks, so replay this verbatim.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        signature: Option<String>,
+    },
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
@@ -249,6 +257,9 @@ pub fn context_window_for_model(model: &str) -> Option<u32> {
 
 fn known_context_window_for_model(model_lower: &str) -> Option<u32> {
     match model_lower {
+        // Anthropic 4.6+ models carry a 1M window; Haiku stays at 200K (#3014).
+        "claude-opus-4-8" | "claude-sonnet-4-6" => Some(1_000_000),
+        "claude-haiku-4-5" => Some(200_000),
         "trinity-mini" => Some(128_000),
         "arcee-ai/trinity-large-thinking" | "trinity-large-thinking" | "trinity-large-preview" => {
             Some(262_144)
@@ -285,6 +296,8 @@ pub fn max_output_tokens_for_model(model: &str) -> Option<u32> {
         return Some(384_000);
     }
     match lower.as_str() {
+        "claude-opus-4-8" => Some(128_000),
+        "claude-sonnet-4-6" | "claude-haiku-4-5" => Some(64_000),
         "arcee-ai/trinity-large-thinking" | "trinity-large-thinking" | "moonshotai/kimi-k2.6" => {
             Some(262_144)
         }
@@ -314,7 +327,9 @@ pub fn model_supports_reasoning(model: &str) -> bool {
     }
     matches!(
         lower.as_str(),
-        "arcee-ai/trinity-large-thinking"
+        "claude-opus-4-8"
+            | "claude-sonnet-4-6"
+            | "arcee-ai/trinity-large-thinking"
             | "trinity-large-thinking"
             | "google/gemma-4-31b-it"
             | "google/gemma-4-31b-it:free"
@@ -426,6 +441,9 @@ pub enum StreamEvent {
     MessageStop,
     #[serde(rename = "ping")]
     Ping,
+    /// Anthropic SSE error event (#3014).
+    #[serde(rename = "error")]
+    Error { error: serde_json::Value },
 }
 
 #[allow(dead_code)]
@@ -465,6 +483,10 @@ pub enum Delta {
     ThinkingDelta { thinking: String },
     #[serde(rename = "input_json_delta")]
     InputJsonDelta { partial_json: String },
+    /// Anthropic signed-thinking signature delta (#3014); arrives at the end
+    /// of a thinking block on the native Messages stream.
+    #[serde(rename = "signature_delta")]
+    SignatureDelta { signature: String },
 }
 
 #[allow(dead_code)]

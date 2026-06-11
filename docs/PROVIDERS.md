@@ -30,8 +30,8 @@ The canonical provider IDs are:
 
 `deepseek`, `nvidia-nim`, `openai`, `atlascloud`, `wanjie-ark`, `volcengine`,
 `openrouter`, `xiaomi-mimo`, `novita`, `fireworks`, `siliconflow`,
-`siliconflow-CN`, `arcee`, `moonshot`, `sglang`, `vllm`, `ollama`, and
-`huggingface`.
+`siliconflow-CN`, `arcee`, `moonshot`, `sglang`, `vllm`, `ollama`,
+`huggingface`, `together`, `openai-codex`, and `anthropic`.
 
 Use any of these surfaces to select a provider:
 
@@ -137,6 +137,7 @@ endpoint.
 | `huggingface` | `[providers.huggingface]` | `HUGGINGFACE_API_KEY`, `HF_TOKEN` | `HUGGINGFACE_BASE_URL`; default `https://router.huggingface.co/v1` | `deepseek-ai/DeepSeek-V4-Pro`, `deepseek-ai/DeepSeek-V4-Flash` | Hugging Face Inference Providers OpenAI-compatible route. Org-prefixed model IDs pass through. |
 | `together` | `[providers.together]` | `TOGETHER_API_KEY` | `TOGETHER_BASE_URL`; default `https://api.together.xyz/v1` | `deepseek-ai/DeepSeek-V4-Pro`, `deepseek-ai/DeepSeek-V4-Flash` | Together AI OpenAI-compatible route. `TOGETHER_MODEL` is accepted. Model aliases `deepseek-v4-pro` and `deepseek-v4-flash` normalize to Together's org-prefixed IDs. |
 | `openai-codex` | `[providers.openai_codex]` | OAuth via `codex login` (`~/.codex/auth.json`); env override `OPENAI_CODEX_ACCESS_TOKEN`, `CODEX_ACCESS_TOKEN` | `OPENAI_CODEX_BASE_URL`/`CODEX_BASE_URL`; default `https://chatgpt.com/backend-api` | `gpt-5.5` | **Experimental.** Reuses your existing ChatGPT/Codex CLI OAuth login and talks to the OpenAI Responses API at `/codex/responses`. The access token is read and refreshed from `~/.codex/auth.json`; no API key is stored. `OPENAI_CODEX_MODEL`/`CODEX_MODEL` and `OPENAI_CODEX_ACCOUNT_ID`/`CODEX_ACCOUNT_ID` are accepted. |
+| `anthropic` | `[providers.anthropic]` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL`; default `https://api.anthropic.com` | `claude-opus-4-8`, `claude-sonnet-4-6` (default), `claude-haiku-4-5` | Native Anthropic Messages API route (`/v1/messages`, `x-api-key` + `anthropic-version: 2023-06-01`) — not OpenAI-compatible. Prompt caching via `cache_control` breakpoints, adaptive thinking + `output_config.effort`, signed thinking blocks replayed verbatim, cache telemetry normalized per #2961. `ANTHROPIC_MODEL` is accepted. |
 
 ### Hugging Face Provider vs MCP vs Hub
 
@@ -219,6 +220,7 @@ endpoint when the endpoint supports model listing.
 | `huggingface` | `deepseek-ai/DeepSeek-V4-Pro`, `deepseek-ai/DeepSeek-V4-Flash` | yes | no |
 | `together` | `deepseek-ai/DeepSeek-V4-Pro`, `deepseek-ai/DeepSeek-V4-Flash` | yes | yes |
 | `openai-codex` | `gpt-5.5` | yes | yes |
+| `anthropic` | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | yes | yes for `claude-opus-4-8` and `claude-sonnet-4-6`; no for `claude-haiku-4-5` |
 
 AtlasCloud keeps the same default model as the config layer and adds
 provider-scoped aliases for the Pro and Flash rows. Other AtlasCloud model IDs

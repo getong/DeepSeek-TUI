@@ -1415,7 +1415,7 @@ fn build_chat_messages_with_reasoning(
                         },
                     }));
                 }
-                ContentBlock::Thinking { thinking } => thinking_parts.push(thinking.clone()),
+                ContentBlock::Thinking { thinking, .. } => thinking_parts.push(thinking.clone()),
                 ContentBlock::ToolUse {
                     id,
                     name,
@@ -2044,6 +2044,7 @@ pub(super) fn parse_chat_message(payload: &Value) -> Result<MessageResponse> {
         reasoning_field(message).filter(|reasoning| !reasoning.trim().is_empty())
     {
         content_blocks.push(ContentBlock::Thinking {
+            signature: None,
             thinking: reasoning.to_string(),
         });
     }
@@ -2142,7 +2143,7 @@ fn build_stream_events(response: &MessageResponse) -> Vec<StreamEvent> {
                 }
                 events.push(StreamEvent::ContentBlockStop { index });
             }
-            ContentBlock::Thinking { thinking } => {
+            ContentBlock::Thinking { thinking, .. } => {
                 events.push(StreamEvent::ContentBlockStart {
                     index,
                     content_block: ContentBlockStart::Thinking {

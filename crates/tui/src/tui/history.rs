@@ -638,7 +638,7 @@ pub fn history_cells_from_message(msg: &Message) -> Vec<HistoryCell> {
                     _ => {}
                 }
             }
-            ContentBlock::Thinking { thinking } => {
+            ContentBlock::Thinking { thinking, .. } => {
                 if let Some(HistoryCell::Thinking { content, .. }) = cells.last_mut() {
                     if !content.is_empty() {
                         content.push('\n');

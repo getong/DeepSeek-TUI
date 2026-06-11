@@ -600,6 +600,7 @@ impl Engine {
             ApiProvider::Deepseek | ApiProvider::DeepseekCN => "DEEPSEEK_API_KEY",
             ApiProvider::NvidiaNim => "NVIDIA_API_KEY/NVIDIA_NIM_API_KEY",
             ApiProvider::Openai => "OPENAI_API_KEY",
+            ApiProvider::Anthropic => "ANTHROPIC_API_KEY",
             ApiProvider::Atlascloud => "ATLASCLOUD_API_KEY",
             ApiProvider::WanjieArk => "WANJIE_ARK_API_KEY/WANJIE_API_KEY/WANJIE_MAAS_API_KEY",
             ApiProvider::Volcengine => "VOLCENGINE_API_KEY/VOLCENGINE_ARK_API_KEY/ARK_API_KEY",
