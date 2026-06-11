@@ -807,7 +807,7 @@ fn apply_model_template(prompt: &str, model_id: &str) -> String {
              earlier turns just because the transcript has crossed an older \
              threshold.",
             if window >= 1_000_000 {
-                "one-million-token".to_string()
+                "one-million".to_string()
             } else {
                 format!("{}", window)
             }
@@ -821,8 +821,8 @@ fn apply_model_template(prompt: &str, model_id: &str) -> String {
     prompt = prompt.replace("{context_window_note}", &window_note);
 
     let subagent_econ = crate::pricing::input_cost_note(model_id).unwrap_or_else(|| {
-        "Sub-agents keep your main context clean; use them liberally for \
-         parallel work."
+        "Sub-agents keep your main context clean; their pricing depends on \
+         your provider."
             .to_string()
     });
     prompt = prompt.replace("{subagent_economics}", &subagent_econ);
@@ -837,8 +837,40 @@ fn apply_model_template(prompt: &str, model_id: &str) -> String {
     };
     prompt = prompt.replace("{model_thinking_note}", &thinking_note);
 
+    let model_lower = model_id.to_ascii_lowercase();
+    let is_v4 = model_lower.contains("deepseek") && model_lower.contains("v4");
+    let characteristics = if is_v4 {
+        V4_MODEL_CHARACTERISTICS
+    } else {
+        GENERIC_MODEL_CHARACTERISTICS
+    };
+    prompt = prompt.replace("{model_characteristics}", characteristics);
+
     prompt
 }
+
+/// Architecture self-management section injected for DeepSeek V4 model ids
+/// (the original hardcoded base.md section, now model-gated — #3025).
+const V4_MODEL_CHARACTERISTICS: &str = "## Your V4 Characteristics
+
+You run on V4 architecture. Understanding the internals helps you self-manage:
+
+**Degradation curve.** Retrieval quality holds well through large V4 contexts and remains usable deep into the 1M window. Do not summarize or delete earlier turns just because the transcript has crossed an older 128K-era threshold. Prefer appending stable evidence and suggest `/compact` only near real pressure or when the user asks.
+
+**Prefix cache economics.** V4 caches shared prefixes at 128-token granularity with ~90% cost discount. Prefer appending to existing messages over mutating old ones — deletion or replacement breaks the cache and increases cost. Structure output to maximize prefix reuse across turns.
+
+**Thinking token strategy.** Thinking tokens count against context and replay across turns (the `reasoning_content` rule). Use them strategically: skip for lookups, light for simple code generation, deep for architecture and debugging. Cache conclusions in concise inline summaries rather than re-deriving each turn.
+
+**Parallel execution.** Batch independent reads, searches, and greps into a single turn. Never serialize operations that can run concurrently — parallel tool calls share the same turn and finish faster.";
+
+/// Provider-neutral fallback for non-V4 models: only claims that hold across
+/// providers (prefix caching is widespread; parallel tool calls are harness
+/// behavior, not model behavior).
+const GENERIC_MODEL_CHARACTERISTICS: &str = "## Model Characteristics
+
+**Prefix-cache hygiene.** Many providers cache shared prompt prefixes. Prefer appending to existing messages over mutating old ones — deletion or replacement can break the cache and increase cost. Structure output to maximize prefix reuse across turns.
+
+**Parallel execution.** Batch independent reads, searches, and greps into a single turn. Never serialize operations that can run concurrently — parallel tool calls share the same turn and finish faster.";
 
 const TOOL_TAXONOMY_DISCOVERY: &[&str] = &["grep_files", "file_search"];
 const TOOL_TAXONOMY_GIT: &[&str] = &["git_status", "git_diff"];
@@ -1412,6 +1444,77 @@ mod tests {
             BASE_PROMPT.contains("{model_id}"),
             "BASE_PROMPT must contain the {{model_id}} template for dynamic injection"
         );
+        // #3025: the model-facts placeholders must exist in base.md or the
+        // apply_model_template substitutions are inert.
+        for placeholder in [
+            "{context_window_note}",
+            "{subagent_economics}",
+            "{model_thinking_note}",
+            "{model_characteristics}",
+        ] {
+            assert!(
+                BASE_PROMPT.contains(placeholder),
+                "BASE_PROMPT must contain the {placeholder} template"
+            );
+        }
+    }
+
+    fn assert_no_unresolved_model_placeholders(prompt: &str) {
+        for placeholder in [
+            "{model_id}",
+            "{context_window_note}",
+            "{subagent_economics}",
+            "{model_thinking_note}",
+            "{model_characteristics}",
+        ] {
+            assert!(
+                !prompt.contains(placeholder),
+                "composed prompt must not contain unresolved {placeholder}"
+            );
+        }
+    }
+
+    #[test]
+    fn compose_prompt_for_v4_model_keeps_v4_facts() {
+        let prompt =
+            compose_prompt_with_approval_model_and_shell(Personality::Calm, "deepseek-v4-pro");
+        assert!(prompt.contains("Your V4 Characteristics"));
+        assert!(prompt.contains("one-million-token context window"));
+        assert!(
+            !prompt.contains("one-million-token-token"),
+            "window wording must not duplicate the -token suffix"
+        );
+        assert_no_unresolved_model_placeholders(&prompt);
+    }
+
+    #[test]
+    fn compose_prompt_for_kimi_uses_model_accurate_facts() {
+        let prompt =
+            compose_prompt_with_approval_model_and_shell(Personality::Calm, "moonshotai/kimi-k2.6");
+        assert!(!prompt.contains("Your V4 Characteristics"));
+        assert!(!prompt.contains("one-million"));
+        assert!(!prompt.contains("$0.14"));
+        assert!(prompt.contains("262144-token context window"));
+        assert!(
+            prompt.contains("Models may emit *thinking tokens*"),
+            "kimi-k2.6 supports reasoning so the thinking note must appear"
+        );
+        assert_no_unresolved_model_placeholders(&prompt);
+    }
+
+    #[test]
+    fn compose_prompt_for_unknown_model_uses_honest_fallbacks() {
+        let prompt =
+            compose_prompt_with_approval_model_and_shell(Personality::Calm, "llama3.3:70b");
+        assert!(!prompt.contains("Your V4 Characteristics"));
+        assert!(!prompt.contains("one-million"));
+        assert!(!prompt.contains("$0.14"));
+        assert!(prompt.contains("provider-dependent and not known"));
+        assert!(
+            !prompt.contains("Models may emit *thinking tokens*"),
+            "unknown models must not get the thinking-token note"
+        );
+        assert_no_unresolved_model_placeholders(&prompt);
     }
 
     #[test]

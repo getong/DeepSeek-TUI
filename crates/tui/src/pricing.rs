@@ -314,6 +314,22 @@ mod tests {
     }
 
     #[test]
+    fn input_cost_note_for_flash_names_official_price() {
+        let note = input_cost_note("deepseek-v4-flash").expect("flash pricing is known");
+        assert!(
+            note.contains("$0.14"),
+            "flash cost note must name the official $0.14/M input price, got: {note}"
+        );
+        assert!(note.contains("deepseek-v4-flash"));
+    }
+
+    #[test]
+    fn input_cost_note_unknown_model_returns_none() {
+        assert!(input_cost_note("llama3.3:70b").is_none());
+        assert!(input_cost_note("moonshotai/kimi-k2.6").is_none());
+    }
+
+    #[test]
     fn v4_pro_uses_limited_time_discount_before_expiry() {
         let before_expiry = Utc
             .with_ymd_and_hms(2026, 5, 31, 15, 58, 59)
