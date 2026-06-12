@@ -14,7 +14,8 @@ use codewhale_app_server::{
     AppServerOptions, run as run_app_server, run_stdio as run_app_server_stdio,
 };
 use codewhale_config::{
-    CliRuntimeOverrides, ConfigStore, ProviderKind, ResolvedRuntimeOptions, RuntimeApiKeySource,
+    CliRuntimeOverrides, ConfigStore, ProviderKind, ProviderSource, ResolvedRuntimeOptions,
+    RuntimeApiKeySource,
 };
 use codewhale_execpolicy::{AskForApproval, ExecPolicyContext, ExecPolicyEngine};
 use codewhale_mcp::{McpServerDefinition, run_stdio_server};
@@ -823,6 +824,16 @@ fn provider_is_supported_by_tui(provider: ProviderKind) -> bool {
             | ProviderKind::Together
             | ProviderKind::OpenaiCodex
     )
+}
+
+fn supported_tui_providers_csv() -> String {
+    ProviderKind::ALL
+        .iter()
+        .copied()
+        .filter(|provider| provider_is_supported_by_tui(*provider))
+        .map(ProviderKind::as_str)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[cfg(test)]
@@ -1699,44 +1710,70 @@ fn build_tui_command(
     }
     cmd.args(passthrough);
 
+    let mut launch_provider_override = cli.provider.map(ProviderKind::from);
+    let mut keyring_bridge_provider = resolved_runtime.provider;
+    let mut keyring_bridge_api_key = resolved_runtime.api_key.as_ref();
+    let mut keyring_bridge_source = resolved_runtime.api_key_source;
+
     if !provider_is_supported_by_tui(resolved_runtime.provider) {
-        let source_hint = if cli.provider.is_some() {
-            "set via --provider flag"
-        } else {
-            "resolved from config file or environment"
-        };
-        bail!(
-            "The interactive TUI does not support provider '{}' ({}).\n\
-             \n\
-             Supported TUI providers: deepseek, openai, ollama, openrouter, nvidia-nim, \n\
-             volcengine, siliconflow, moonshot, arcee, fireworks, novita, xiaomi-mimo,\n\
-             huggingface, sglang, vllm, atlascloud, wanjie-ark, together, openai-codex.\n\
-             \n\
-             To fix:\n\
-             - Set a supported provider in your config file (~/.codewhale/config.toml)\n\
-               under [providers.<id>] with an api_key, or\n\
-             - Pass --provider <supported-id> on the command line, or\n\
-             - Run `codewhale exec --provider <supported-id> \"your prompt\"` for a\n\
-               one-shot non-interactive session with this provider.",
-            resolved_runtime.provider.as_str(),
-            source_hint,
-        );
+        let supported = supported_tui_providers_csv();
+        match resolved_runtime.provider_source {
+            ProviderSource::Cli => {
+                bail!(
+                    "The interactive TUI does not support provider '{}' from --provider.\n\
+                     \n\
+                     Supported TUI providers: {supported}.\n\
+                     \n\
+                     To fix: remove `--provider {}` or pass a supported provider. \
+                     For this provider, use `codewhale exec --provider {} \"your prompt\"`.",
+                    resolved_runtime.provider.as_str(),
+                    resolved_runtime.provider.as_str(),
+                    resolved_runtime.provider.as_str(),
+                );
+            }
+            ProviderSource::Env(var) => {
+                bail!(
+                    "The interactive TUI does not support provider '{}' from {var}.\n\
+                     \n\
+                     Supported TUI providers: {supported}.\n\
+                     \n\
+                     To fix: unset {var} or set it to a supported provider. \
+                     For this provider, use `codewhale exec --provider {} \"your prompt\"`.",
+                    resolved_runtime.provider.as_str(),
+                    resolved_runtime.provider.as_str(),
+                );
+            }
+            ProviderSource::Config => {
+                let config_hint = cli
+                    .config
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "~/.codewhale/config.toml".to_string());
+                eprintln!(
+                    "Warning: provider '{}' from config is not supported by the interactive TUI; \
+                     launching with deepseek instead. Edit {config_hint} and set \
+                     provider = \"deepseek\", or pass --provider <supported-id>.",
+                    resolved_runtime.provider.as_str(),
+                );
+                launch_provider_override = Some(ProviderKind::Deepseek);
+                keyring_bridge_provider = ProviderKind::Deepseek;
+                keyring_bridge_api_key = None;
+                keyring_bridge_source = None;
+            }
+        }
     }
 
-    if let Some(provider) = cli.provider {
-        let provider: ProviderKind = provider.into();
+    if let Some(provider) = launch_provider_override {
         cmd.env("DEEPSEEK_PROVIDER", provider.as_str());
     }
-    if matches!(
-        resolved_runtime.api_key_source,
-        Some(RuntimeApiKeySource::Keyring)
-    ) && let Some(api_key) = resolved_runtime.api_key.as_ref()
+    if matches!(keyring_bridge_source, Some(RuntimeApiKeySource::Keyring))
+        && let Some(api_key) = keyring_bridge_api_key
     {
         // TUI reloads auth_mode from config/profile, but it does not re-query the
         // platform keyring on normal startup. Bridge only the recovered secret;
         // replaying auth_mode here would turn it back into a profile override.
         cmd.env("DEEPSEEK_API_KEY", api_key);
-        for var in provider_env_vars(resolved_runtime.provider) {
+        for var in provider_env_vars(keyring_bridge_provider) {
             if *var != "DEEPSEEK_API_KEY" {
                 cmd.env(var, api_key);
             }
@@ -1982,6 +2019,40 @@ mod tests {
                     std::env::remove_var(self.name);
                 }
             }
+        }
+    }
+
+    fn install_fake_tui_binary() -> (tempfile::TempDir, ScopedEnvVar) {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let custom = dir
+            .path()
+            .join(format!("custom-tui{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&custom, b"").unwrap();
+        let custom_str = custom.to_string_lossy().into_owned();
+        let bin = ScopedEnvVar::set("DEEPSEEK_TUI_BIN", &custom_str);
+        (dir, bin)
+    }
+
+    fn resolved_runtime_for_test(
+        provider: ProviderKind,
+        provider_source: ProviderSource,
+    ) -> ResolvedRuntimeOptions {
+        ResolvedRuntimeOptions {
+            provider,
+            provider_source,
+            model: "test-model".to_string(),
+            api_key: None,
+            api_key_source: None,
+            base_url: "http://localhost:8000/v1".to_string(),
+            auth_mode: None,
+            insecure_skip_tls_verify: false,
+            output_mode: None,
+            log_level: None,
+            telemetry: false,
+            approval_policy: None,
+            sandbox_mode: None,
+            yolo: None,
+            http_headers: std::collections::BTreeMap::new(),
         }
     }
 
@@ -3112,6 +3183,7 @@ mod tests {
         ]);
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::Openai,
+            provider_source: ProviderSource::Cli,
             model: "glm-5".to_string(),
             api_key: Some("resolved-openai-key".to_string()),
             api_key_source: Some(RuntimeApiKeySource::Keyring),
@@ -3170,6 +3242,7 @@ mod tests {
         let cli = parse_ok(&["codewhale", "doctor"]);
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::OpenaiCodex,
+            provider_source: ProviderSource::Config,
             model: "gpt-5.5".to_string(),
             api_key: None,
             api_key_source: None,
@@ -3209,6 +3282,7 @@ mod tests {
         let cli = parse_ok(&["codewhale", "--provider", "openai-codex", "doctor"]);
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::OpenaiCodex,
+            provider_source: ProviderSource::Cli,
             model: "gpt-5.5".to_string(),
             api_key: None,
             api_key_source: None,
@@ -3233,6 +3307,66 @@ mod tests {
     }
 
     #[test]
+    fn build_tui_command_rejects_unsupported_cli_provider_with_flag_hint() {
+        let _lock = env_lock();
+        let (_dir, _bin) = install_fake_tui_binary();
+
+        let cli = parse_ok(&["codewhale", "doctor"]);
+        let resolved = resolved_runtime_for_test(ProviderKind::Anthropic, ProviderSource::Cli);
+
+        let err = build_tui_command(&cli, &resolved, vec!["doctor".to_string()])
+            .expect_err("unsupported provider should fail");
+        let msg = err.to_string();
+
+        assert!(msg.contains("from --provider"), "{msg}");
+        assert!(msg.contains("remove `--provider anthropic`"), "{msg}");
+        assert!(msg.contains("Supported TUI providers:"), "{msg}");
+    }
+
+    #[test]
+    fn build_tui_command_rejects_unsupported_env_provider_with_env_hint() {
+        let _lock = env_lock();
+        let (_dir, _bin) = install_fake_tui_binary();
+
+        let cli = parse_ok(&["codewhale", "doctor"]);
+        let resolved = resolved_runtime_for_test(
+            ProviderKind::Anthropic,
+            ProviderSource::Env("DEEPSEEK_PROVIDER"),
+        );
+
+        let err = build_tui_command(&cli, &resolved, vec!["doctor".to_string()])
+            .expect_err("unsupported provider should fail");
+        let msg = err.to_string();
+
+        assert!(msg.contains("from DEEPSEEK_PROVIDER"), "{msg}");
+        assert!(msg.contains("unset DEEPSEEK_PROVIDER"), "{msg}");
+        assert!(msg.contains("Supported TUI providers:"), "{msg}");
+    }
+
+    #[test]
+    fn build_tui_command_config_fallback_does_not_forward_stale_keyring_secret() {
+        let _lock = env_lock();
+        let (_dir, _bin) = install_fake_tui_binary();
+
+        let cli = parse_ok(&["codewhale", "doctor"]);
+        let mut resolved =
+            resolved_runtime_for_test(ProviderKind::Anthropic, ProviderSource::Config);
+        resolved.api_key = Some("anthropic-keyring-secret".to_string());
+        resolved.api_key_source = Some(RuntimeApiKeySource::Keyring);
+
+        let cmd = build_tui_command(&cli, &resolved, vec!["doctor".to_string()])
+            .expect("config-sourced unsupported provider should fall back");
+
+        assert_eq!(
+            command_env(&cmd, "DEEPSEEK_PROVIDER").as_deref(),
+            Some("deepseek")
+        );
+        assert_eq!(command_env(&cmd, "DEEPSEEK_API_KEY"), None);
+        assert_eq!(command_env(&cmd, "ANTHROPIC_API_KEY"), None);
+        assert_eq!(command_env(&cmd, "DEEPSEEK_API_KEY_SOURCE"), None);
+    }
+
+    #[test]
     fn build_tui_command_does_not_export_default_runtime_overrides_for_profiles() {
         let _lock = env_lock();
         let dir = tempfile::TempDir::new().expect("tempdir");
@@ -3248,6 +3382,7 @@ mod tests {
         resolved_headers.insert("X-From-Base".to_string(), "base".to_string());
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::Deepseek,
+            provider_source: ProviderSource::Config,
             model: "deepseek-v4-pro".to_string(),
             api_key: Some("config-file-key".to_string()),
             api_key_source: Some(RuntimeApiKeySource::ConfigFile),
@@ -3304,6 +3439,7 @@ mod tests {
         ]);
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::Moonshot,
+            provider_source: ProviderSource::Cli,
             model: "kimi-k2.6".to_string(),
             api_key: Some("resolved-kimi-key".to_string()),
             api_key_source: Some(RuntimeApiKeySource::Keyring),
@@ -3369,6 +3505,7 @@ mod tests {
         ]);
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::Volcengine,
+            provider_source: ProviderSource::Cli,
             model: "DeepSeek-V4-Pro".to_string(),
             api_key: Some("resolved-ark-key".to_string()),
             api_key_source: Some(RuntimeApiKeySource::Keyring),
@@ -3435,6 +3572,7 @@ mod tests {
         ]);
         let resolved = ResolvedRuntimeOptions {
             provider: ProviderKind::Openai,
+            provider_source: ProviderSource::Cli,
             model: "glm-5".to_string(),
             api_key: None,
             api_key_source: None,
@@ -3531,6 +3669,7 @@ mod tests {
             ]);
             let resolved = ResolvedRuntimeOptions {
                 provider,
+                provider_source: ProviderSource::Cli,
                 model: "test-model".to_string(),
                 api_key: Some("test-key".to_string()),
                 api_key_source: Some(RuntimeApiKeySource::Keyring),

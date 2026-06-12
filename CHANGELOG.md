@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Constitution trust wording (#2950/#3008).** The base prompt now explains
   that "begins with an A" means a baseline of trust, not a literal output
   formatting rule. Thanks @cyq1017 for the PR.
+- **TUI provider-source recovery (#3007/#3011).** Unsupported interactive
+  providers now report whether the value came from `--provider`, environment,
+  or config. Config-sourced unsupported providers fall back to DeepSeek without
+  forwarding stale keyring secrets. Thanks @cyq1017 for the PR.
 - **TUI mouse-report leak (#3063/#3067).** Strip raw SGR mouse coordinate
   tails from the composer even when `use_mouse_capture` is false, covering
   orphaned terminal reporting state after crashes or focus races.

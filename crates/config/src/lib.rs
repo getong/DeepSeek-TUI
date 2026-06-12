@@ -2001,7 +2001,16 @@ impl ConfigToml {
         secrets: &Secrets,
     ) -> ResolvedRuntimeOptions {
         let env = EnvRuntimeOverrides::load();
-        let provider = cli.provider.or(env.provider).unwrap_or(self.provider);
+        let (provider, provider_source) = if let Some(provider) = cli.provider {
+            (provider, ProviderSource::Cli)
+        } else if let Some(provider) = env.provider {
+            (
+                provider,
+                ProviderSource::Env(env.provider_source.unwrap_or("CODEWHALE_PROVIDER")),
+            )
+        } else {
+            (self.provider, ProviderSource::Config)
+        };
 
         let mut provider_cfg = self.providers.for_provider(provider).clone();
         if provider == ProviderKind::SiliconflowCN {
@@ -2196,6 +2205,7 @@ impl ConfigToml {
 
         ResolvedRuntimeOptions {
             provider,
+            provider_source,
             model,
             api_key,
             api_key_source,
@@ -2835,9 +2845,17 @@ impl RuntimeApiKeySource {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderSource {
+    Cli,
+    Env(&'static str),
+    Config,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedRuntimeOptions {
     pub provider: ProviderKind,
+    pub provider_source: ProviderSource,
     pub model: String,
     pub api_key: Option<String>,
     pub api_key_source: Option<RuntimeApiKeySource>,
@@ -3263,6 +3281,7 @@ fn normalize_config_file_path(path: PathBuf) -> Result<PathBuf> {
 #[derive(Debug, Clone, Default)]
 struct EnvRuntimeOverrides {
     provider: Option<ProviderKind>,
+    provider_source: Option<&'static str>,
     model: Option<String>,
     volcengine_model: Option<String>,
     wanjie_ark_model: Option<String>,
@@ -3310,11 +3329,10 @@ struct EnvRuntimeOverrides {
 
 impl EnvRuntimeOverrides {
     fn load() -> Self {
+        let (provider, provider_source) = Self::load_provider();
         Self {
-            provider: std::env::var("CODEWHALE_PROVIDER")
-                .or_else(|_| std::env::var("DEEPSEEK_PROVIDER"))
-                .ok()
-                .and_then(|v| ProviderKind::parse(&v)),
+            provider,
+            provider_source,
             model: std::env::var("CODEWHALE_MODEL")
                 .or_else(|_| std::env::var("DEEPSEEK_MODEL"))
                 .or_else(|_| std::env::var("DEEPSEEK_DEFAULT_TEXT_MODEL"))
@@ -3476,6 +3494,20 @@ impl EnvRuntimeOverrides {
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
         }
+    }
+
+    fn load_provider() -> (Option<ProviderKind>, Option<&'static str>) {
+        if let Ok(value) = std::env::var("CODEWHALE_PROVIDER") {
+            let parsed = ProviderKind::parse(&value);
+            return (parsed, parsed.map(|_| "CODEWHALE_PROVIDER"));
+        }
+
+        if let Ok(value) = std::env::var("DEEPSEEK_PROVIDER") {
+            let parsed = ProviderKind::parse(&value);
+            return (parsed, parsed.map(|_| "DEEPSEEK_PROVIDER"));
+        }
+
+        (None, None)
     }
 
     fn base_url_for(&self, provider: ProviderKind) -> Option<String> {
@@ -5578,6 +5610,10 @@ mode = "token-plan-usa"
         let resolved = config.resolve_runtime_options(&CliRuntimeOverrides::default());
 
         assert_eq!(resolved.provider, ProviderKind::Moonshot);
+        assert_eq!(
+            resolved.provider_source,
+            ProviderSource::Env("CODEWHALE_PROVIDER")
+        );
         assert_eq!(resolved.base_url, DEFAULT_KIMI_CODE_BASE_URL);
         assert_eq!(resolved.model, DEFAULT_KIMI_CODE_MODEL);
         assert_eq!(resolved.api_key.as_deref(), Some("kimi-code-key"));
@@ -5604,6 +5640,70 @@ mode = "token-plan-usa"
         let resolved = config.resolve_runtime_options(&CliRuntimeOverrides::default());
 
         assert_eq!(resolved.provider, ProviderKind::Moonshot);
+        assert_eq!(
+            resolved.provider_source,
+            ProviderSource::Env("CODEWHALE_PROVIDER")
+        );
+    }
+
+    #[test]
+    fn legacy_deepseek_provider_env_records_provider_source() {
+        let _lock = env_lock();
+        let _env = EnvGuard::without_deepseek_runtime_overrides();
+        // Safety: test-only env mutation guarded by env_lock().
+        unsafe {
+            env::set_var("DEEPSEEK_PROVIDER", "openrouter");
+        }
+        let config = ConfigToml {
+            provider: ProviderKind::Deepseek,
+            ..ConfigToml::default()
+        };
+
+        let resolved = config.resolve_runtime_options(&CliRuntimeOverrides::default());
+
+        assert_eq!(resolved.provider, ProviderKind::Openrouter);
+        assert_eq!(
+            resolved.provider_source,
+            ProviderSource::Env("DEEPSEEK_PROVIDER")
+        );
+    }
+
+    #[test]
+    fn cli_provider_records_provider_source() {
+        let _lock = env_lock();
+        let _env = EnvGuard::without_deepseek_runtime_overrides();
+        // Safety: test-only env mutation guarded by env_lock().
+        unsafe {
+            env::set_var("CODEWHALE_PROVIDER", "moonshot");
+        }
+        let cli = CliRuntimeOverrides {
+            provider: Some(ProviderKind::Openai),
+            ..CliRuntimeOverrides::default()
+        };
+        let config = ConfigToml {
+            provider: ProviderKind::Deepseek,
+            ..ConfigToml::default()
+        };
+
+        let resolved = config.resolve_runtime_options(&cli);
+
+        assert_eq!(resolved.provider, ProviderKind::Openai);
+        assert_eq!(resolved.provider_source, ProviderSource::Cli);
+    }
+
+    #[test]
+    fn config_provider_records_provider_source() {
+        let _lock = env_lock();
+        let _env = EnvGuard::without_deepseek_runtime_overrides();
+        let config = ConfigToml {
+            provider: ProviderKind::Moonshot,
+            ..ConfigToml::default()
+        };
+
+        let resolved = config.resolve_runtime_options(&CliRuntimeOverrides::default());
+
+        assert_eq!(resolved.provider, ProviderKind::Moonshot);
+        assert_eq!(resolved.provider_source, ProviderSource::Config);
     }
 
     /// `CODEWHALE_MODEL` is the user-facing env alias for picking a model
