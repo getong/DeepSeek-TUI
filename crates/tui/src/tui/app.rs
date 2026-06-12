@@ -5217,9 +5217,7 @@ impl App {
 
     pub fn advance_fallback(&mut self, reason: impl Into<String>) -> Option<ApiProvider> {
         let reason = reason.into();
-        let Some(chain) = self.provider_chain.as_mut() else {
-            return None;
-        };
+        let chain = self.provider_chain.as_mut()?;
         let Some(next_kind) = chain.advance() else {
             self.last_fallback_reason = Some(format!(
                 "Fallback chain exhausted after {} provider(s): {reason}",

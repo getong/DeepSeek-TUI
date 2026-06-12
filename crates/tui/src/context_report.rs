@@ -635,7 +635,7 @@ pub fn format_context_report(report: &PromptSourceMap) -> String {
 
 pub fn format_context_summary(report: &PromptSourceMap) -> String {
     let mut entries = report.entries.clone();
-    entries.sort_by(|a, b| b.estimated_tokens.cmp(&a.estimated_tokens));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.estimated_tokens));
     let top = entries
         .iter()
         .take(5)

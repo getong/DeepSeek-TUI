@@ -2122,7 +2122,7 @@ fn should_render_empty_state(app: &App) -> bool {
     let active_is_empty = app
         .active_cell
         .as_ref()
-        .map_or(true, crate::tui::active_cell::ActiveCell::is_empty);
+        .is_none_or(crate::tui::active_cell::ActiveCell::is_empty);
     app.history.is_empty()
         && active_is_empty
         && !app.is_loading
