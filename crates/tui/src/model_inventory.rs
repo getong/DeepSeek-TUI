@@ -177,7 +177,7 @@ fn provider_default_model(config: &Config, provider: ApiProvider) -> String {
     model_completion_names_for_provider(provider)
         .first()
         .copied()
-        .unwrap_or_else(|| match provider {
+        .unwrap_or(match provider {
             ApiProvider::Ollama => crate::config::DEFAULT_OLLAMA_MODEL,
             ApiProvider::Sglang => crate::config::DEFAULT_SGLANG_MODEL,
             ApiProvider::Vllm => crate::config::DEFAULT_VLLM_MODEL,
