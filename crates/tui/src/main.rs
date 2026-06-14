@@ -7329,6 +7329,7 @@ mod terminal_mode_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn explicit_exec_model_routes_to_unique_authenticated_provider_candidate() {
         let _env_lock = crate::test_support::lock_test_env();
         let _zai = crate::test_support::EnvVarGuard::set("ZAI_API_KEY", "zai-key");
@@ -7349,6 +7350,7 @@ mod terminal_mode_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn explicit_exec_model_reports_ambiguous_authenticated_provider_candidates() {
         let _env_lock = crate::test_support::lock_test_env();
         let _zai = crate::test_support::EnvVarGuard::set("ZAI_API_KEY", "zai-key");

@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Slash-menu Ctrl+P/Ctrl+N navigation (#3196).** The slash command menu now
   supports Ctrl+P/Ctrl+N movement without letting the global file picker steal
   focus while the menu is open. Thanks @1Git2Clone for the PR.
+- **New models and first-party provider routes.** This release adds
+  **GLM-5.2** (selectable on the Z.ai Coding Plan and over OpenRouter as
+  `z-ai/glm-5.2`, alongside the existing GLM-5.1 default), a first-party
+  **Z.ai** provider route, a first-party **StepFun / StepFlash** route
+  (`step-3.7-flash`), and a first-party **MiniMax** route defaulting to
+  `MiniMax-M3` with the M2.7/M2.5/M2.1 family selectable (#3187/#3191).
 
 ### Changed
 

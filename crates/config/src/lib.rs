@@ -7423,7 +7423,7 @@ fallback_providers = ["deepseek", "openrouter"]
             DEFAULT_SPAWN_DEPTH
         );
         assert_eq!(FleetExecConfig::default().max_spawn_depth, 3);
-        assert!(DEFAULT_SPAWN_DEPTH <= MAX_SPAWN_DEPTH_CEILING);
+        const { assert!(DEFAULT_SPAWN_DEPTH <= MAX_SPAWN_DEPTH_CEILING) };
     }
 
     #[test]
